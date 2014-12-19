@@ -14,7 +14,7 @@ import (
 )
 
 var testLocal = flag.Bool("local", false, "Perform the tests only on local test environment, not by default.") // This flag will be passed here via "go test -local" args
-var kamAddr = flag.String("kam_addr", "192.168.56.73:8228", "Address where to reach kamailio evapi")
+var kamAddr = flag.String("kam_addr", "127.0.0.1:8448", "Address where to reach kamailio evapi")
 
 var kea *KamEvapi
 
@@ -27,9 +27,9 @@ func TestKamailioConn(t *testing.T) {
 	if err != nil {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
-	if kea, err = NewKamEvapi(*kamAddr, 3, true, l); err != nil {
+	if kea, err = NewKamEvapi(*kamAddr, 3, nil, l); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
 	}
 	err = kea.Send("CGR-SM Connected!")
-	time.Sleep(time.Duration(5) * time.Minute) // Wait 5 mins for events to show up
+	time.Sleep(time.Duration(2) * time.Second) // Wait 5 mins for events to show up
 }
