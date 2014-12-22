@@ -29,7 +29,7 @@ func fib() func() int {
 }
 
 // Creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
-func NewKamEvapi(addr string, recons int, eventHandlers map[*regexp.Regexp][]func(string), logger *syslog.Writer) (*KamEvapi, error) {
+func NewKamEvapi(addr string, recons int, eventHandlers map[*regexp.Regexp][]func([]byte), logger *syslog.Writer) (*KamEvapi, error) {
 	kea := &KamEvapi{kamaddr: addr, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib()}
 	if err := kea.Connect(); err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func NewKamEvapi(addr string, recons int, eventHandlers map[*regexp.Regexp][]fun
 type KamEvapi struct {
 	kamaddr        string // IP:Port address where to reach kamailio
 	reconnects     int
-	eventHandlers  map[*regexp.Regexp][]func(string)
+	eventHandlers  map[*regexp.Regexp][]func([]byte)
 	logger         *syslog.Writer
 	delayFunc      func() int
 	conn           net.Conn
@@ -51,29 +51,29 @@ type KamEvapi struct {
 }
 
 // Reads bytes from the buffer and dispatch content received as netstring
-func (kea *KamEvapi) readNetstring() (string, error) {
+func (kea *KamEvapi) readNetstring() ([]byte, error) {
 	contentLenStr, err := kea.rcvBuffer.ReadString(':')
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	cntLen, err := strconv.Atoi(contentLenStr[:len(contentLenStr)-1])
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	bytesRead := make([]byte, cntLen)
 	for i := 0; i < cntLen; i++ {
 		byteRead, err := kea.rcvBuffer.ReadByte()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		bytesRead[i] = byteRead
 	}
 	if byteRead, err := kea.rcvBuffer.ReadByte(); err != nil { // Crosscheck that our received content ends in , which is standard for netstrings
-		return "", err
+		return nil, err
 	} else if byteRead != ',' {
-		return "", fmt.Errorf("Crosschecking netstring failed, no comma in the end but: %s", string(byteRead))
+		return nil, fmt.Errorf("Crosschecking netstring failed, no comma in the end but: %s", string(byteRead))
 	}
-	return string(bytesRead), nil
+	return bytesRead, nil
 }
 
 // Reads netstrings from socket, dispatch content
@@ -103,10 +103,10 @@ func (kea *KamEvapi) sendAsNetstring(dataStr string) error {
 }
 
 // Dispatch the event received from Kamailio towards handlers matching it
-func (kea *KamEvapi) dispatchEvent(dataIn string) {
+func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 	matched := false
 	for matcher, handlers := range kea.eventHandlers {
-		if matcher.MatchString(dataIn) {
+		if matcher.Match(dataIn) {
 			matched = true
 			for _, f := range handlers {
 				go f(dataIn)
