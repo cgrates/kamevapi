@@ -8,20 +8,82 @@ Provides Kamailio evapi socket communication.
 package kamevapi
 
 import (
-	//"bufio"
-	//"os"
+	"bufio"
+	"os"
+	"reflect"
+	"regexp"
 	"testing"
+	"time"
 )
 
-//ToDo: fix this with real events
+var authRequest = `188:{"event":"CGR_AUTH_REQUEST",
+  "tr_index":"35215",
+  "tr_label":"852281699",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_setuptime":"1420142013"},`
+
+var callStart = `264:{"event":"CGR_CALL_START",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "h_entry":"2395",
+  "h_id":"2711",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016"},`
+var callEnd = `248:{"event":"CGR_CALL_END",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001", 
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016",
+  "cgr_duration":"6"},`
+
 func TestDispatchEvent(t *testing.T) {
-	return
-	/*r, w, err := os.Pipe()
+	r, w, err := os.Pipe()
 	if err != nil {
 		t.Error("Error creating pipe!")
 	}
 	kea = &KamEvapi{}
 	kea.rcvBuffer = bufio.NewReader(r)
-	var events int32
-	*/
+	var events []string
+	kea.eventHandlers = map[*regexp.Regexp][]func([]byte){
+		regexp.MustCompile(".*"): []func([]byte){func(ev []byte) { events = append(events, string(ev)) }},
+	}
+	go kea.readEvents(make(chan struct{}), make(chan error))
+	w.WriteString(authRequest)
+	w.WriteString(callStart)
+	w.WriteString(callEnd)
+	time.Sleep(50 * time.Millisecond)
+	expectEvents := []string{
+		`{"event":"CGR_AUTH_REQUEST",
+  "tr_index":"35215",
+  "tr_label":"852281699",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_setuptime":"1420142013"}`, `{"event":"CGR_CALL_START",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "h_entry":"2395",
+  "h_id":"2711",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016"}`, `{"event":"CGR_CALL_END",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001", 
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016",
+  "cgr_duration":"6"}`,
+	}
+	if !reflect.DeepEqual(expectEvents, events) {
+		t.Errorf("Received events: %+v", events)
+	}
+
 }
