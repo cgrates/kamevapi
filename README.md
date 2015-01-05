@@ -3,7 +3,7 @@ kamevapi
 
 Kamailio evapi connector from Go
 
-[![Build Status](https://secure.travis-ci.org/kamevapi/kamevapi.png)](http://travis-ci.org/kamevapi/kamevapi)
+[![Build Status](https://secure.travis-ci.org/cgrates/kamevapi.png)](http://travis-ci.org/cgrates/kamevapi)
 
 ## Installation ##
 
