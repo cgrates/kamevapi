@@ -27,7 +27,7 @@ func TestKamailioConn(t *testing.T) {
 	if err != nil {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
-	if kea, err = NewKamEvapi(*kamAddr, 3, nil, l); err != nil {
+	if kea, err = NewKamEvapi(*kamAddr, "", 3, nil, l); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
 	}
 	err = kea.Send("CGR-SM Connected!")

@@ -50,8 +50,8 @@ func TestDispatchEvent(t *testing.T) {
 	kea = &KamEvapi{}
 	kea.rcvBuffer = bufio.NewReader(r)
 	var events []string
-	kea.eventHandlers = map[*regexp.Regexp][]func([]byte){
-		regexp.MustCompile(".*"): []func([]byte){func(ev []byte) { events = append(events, string(ev)) }},
+	kea.eventHandlers = map[*regexp.Regexp][]func([]byte, string){
+		regexp.MustCompile(".*"): []func([]byte, string){func(ev []byte, ignr string) { events = append(events, string(ev)) }},
 	}
 	go kea.readEvents(make(chan struct{}), make(chan error))
 	w.WriteString(authRequest)

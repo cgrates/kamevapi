@@ -29,8 +29,8 @@ func fib() func() int {
 }
 
 // Creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
-func NewKamEvapi(addr string, recons int, eventHandlers map[*regexp.Regexp][]func([]byte), logger *syslog.Writer) (*KamEvapi, error) {
-	kea := &KamEvapi{kamaddr: addr, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib()}
+func NewKamEvapi(addr, connId string, recons int, eventHandlers map[*regexp.Regexp][]func([]byte, string), logger *syslog.Writer) (*KamEvapi, error) {
+	kea := &KamEvapi{kamaddr: addr, connId: connId, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib()}
 	if err := kea.Connect(); err != nil {
 		return nil, err
 	}
@@ -39,8 +39,9 @@ func NewKamEvapi(addr string, recons int, eventHandlers map[*regexp.Regexp][]fun
 
 type KamEvapi struct {
 	kamaddr        string // IP:Port address where to reach kamailio
+	connId         string // Optional connection identifier between library and component using it
 	reconnects     int
-	eventHandlers  map[*regexp.Regexp][]func([]byte)
+	eventHandlers  map[*regexp.Regexp][]func([]byte, string)
 	logger         *syslog.Writer
 	delayFunc      func() int
 	conn           net.Conn
@@ -109,7 +110,7 @@ func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 		if matcher.Match(dataIn) {
 			matched = true
 			for _, f := range handlers {
-				go f(dataIn)
+				go f(dataIn, kea.connId)
 			}
 		}
 	}
@@ -205,6 +206,7 @@ func (kea *KamEvapi) Send(dataStr string) error {
 // Connection handler for commands sent to FreeSWITCH
 type KamEvapiPool struct {
 	kamAddr      string
+	connId       string
 	reconnects   int
 	logger       *syslog.Writer
 	allowedConns chan struct{}  // Will be populated with allowed new connections
@@ -225,7 +227,7 @@ func (keap *KamEvapiPool) PopKamEvapi() (*KamEvapi, error) {
 	select { // No KamEvapi available in the pool, wait for first one showing up
 	case KamEvapi = <-keap.conns:
 	case <-keap.allowedConns:
-		KamEvapi, err = NewKamEvapi(keap.kamAddr, keap.reconnects, nil, keap.logger)
+		KamEvapi, err = NewKamEvapi(keap.kamAddr, keap.connId, keap.reconnects, nil, keap.logger)
 		if err != nil {
 			return nil, err
 		}
@@ -247,8 +249,8 @@ func (keap *KamEvapiPool) PushKamEvapi(kea *KamEvapi) {
 }
 
 // Instantiates a new KamEvapiPool
-func NewKamEvapiPool(maxconns int, kamAddr string, reconnects int, l *syslog.Writer) (*KamEvapiPool, error) {
-	pool := &KamEvapiPool{kamAddr: kamAddr, reconnects: reconnects, logger: l}
+func NewKamEvapiPool(maxconns int, kamAddr, connId string, reconnects int, l *syslog.Writer) (*KamEvapiPool, error) {
+	pool := &KamEvapiPool{kamAddr: kamAddr, connId: connId, reconnects: reconnects, logger: l}
 	pool.allowedConns = make(chan struct{}, maxconns)
 	var emptyConn struct{}
 	for i := 0; i < maxconns; i++ {
