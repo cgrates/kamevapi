@@ -30,7 +30,15 @@ func fib() func() int {
 
 // Creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
 func NewKamEvapi(addr, connId string, recons int, eventHandlers map[*regexp.Regexp][]func([]byte, string), logger *syslog.Writer) (*KamEvapi, error) {
-	kea := &KamEvapi{kamaddr: addr, connId: connId, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib()}
+	kea := &KamEvapi{
+		kamaddr:       addr,
+		connId:        connId,
+		reconnects:    recons,
+		eventHandlers: eventHandlers,
+		logger:        logger,
+		delayFunc:     fib(),
+		ping:          true,
+		ping_delay:    20}
 	if err := kea.Connect(); err != nil {
 		return nil, err
 	}
@@ -49,6 +57,8 @@ type KamEvapi struct {
 	dataInChan     chan string   // Listen here for replies from Kamailio
 	stopReadEvents chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
 	errReadEvents  chan error
+	ping           bool
+	ping_delay     int
 }
 
 // Reads bytes from the buffer and dispatch content received as netstring
@@ -99,7 +109,12 @@ func (kea *KamEvapi) readEvents(exitChan chan struct{}, errReadEvents chan error
 func (kea *KamEvapi) sendAsNetstring(dataStr string) error {
 	cntLen := len([]byte(dataStr)) // Netstrings require number of bytes sent
 	dataOut := fmt.Sprintf("%d:%s,", cntLen, dataStr)
-	fmt.Fprint(kea.conn, dataOut)
+	_, err := fmt.Fprint(kea.conn, dataOut)
+	if err != nil {
+		kea.logger.Err(fmt.Sprintf("<KamEvapi> Socket invalid (%s)", err))
+		kea.Disconnect()
+		kea.ReconnectIfNeeded()
+	}
 	return nil
 }
 
@@ -162,7 +177,27 @@ func (kea *KamEvapi) Connect() error {
 	kea.stopReadEvents = stopReadEvents
 	kea.errReadEvents = make(chan error)
 	go kea.readEvents(stopReadEvents, kea.errReadEvents) // Fork read events in it's own goroutine
-	return nil                                           // Connected
+	if kea.ping {
+		go kea.Ping()
+	}
+	return nil
+}
+
+func (kea *KamEvapi) Ping() {
+	data := []byte("{\"Event\":\"ping\"}")
+	cntLen := len(data)
+	dataOut := fmt.Sprintf("%d:%s,", cntLen, data)
+
+	for {
+		_, err := fmt.Fprint(kea.conn, dataOut)
+		if err != nil {
+			kea.logger.Err(fmt.Sprintf("<KamEvapi> Invalid Socket (%s)", err))
+			kea.Disconnect()
+			kea.ReconnectIfNeeded()
+		}
+		time.Sleep(time.Duration(kea.ping_delay) * time.Second)
+	}
+	return
 }
 
 // If not connected, attempt reconnect if allowed
@@ -173,8 +208,10 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 	if kea.reconnects == 0 { // No reconnects allowed
 		return errors.New("Not connected to Kamailio")
 	}
+
 	var err error
 	for i := 0; i < kea.reconnects; i++ {
+		kea.logger.Info(fmt.Sprintf("<KamEvapi> Socket is disconnected. Reconnecting"))
 		if err = kea.Connect(); err == nil || kea.Connected() {
 			break // No error or unrelated to connection
 		}
