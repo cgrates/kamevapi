@@ -130,7 +130,9 @@ func (kea *KamEvapi) Connected() bool {
 // Disconnects from socket
 func (kea *KamEvapi) Disconnect() (err error) {
 	if kea.conn != nil {
+		kea.logger.Info("<KamEvapi> Disconnecting from Kamailio!")
 		err = kea.conn.Close()
+		kea.conn = nil
 	}
 	return
 }
@@ -185,6 +187,9 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 func (kea *KamEvapi) ReadEvents() (err error) {
 	for {
 		if err = <-kea.errReadEvents; err == io.EOF { // Disconnected, try reconnect
+			if err = kea.Disconnect(); err != nil {
+				break
+			}
 			if err = kea.ReconnectIfNeeded(); err != nil {
 				break
 			}
