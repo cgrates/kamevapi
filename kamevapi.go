@@ -170,15 +170,27 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 	if kea.Connected() { // No need to reconnect
 		return nil
 	}
-	if kea.reconnects == 0 { // No reconnects allowed
-		return errors.New("Not connected to Kamailio")
-	}
 	var err error
 	for i := 0; i < kea.reconnects; i++ {
 		if err = kea.Connect(); err == nil || kea.Connected() {
 			break // No error or unrelated to connection
 		}
 		time.Sleep(time.Duration(kea.delayFunc()) * time.Second)
+	}
+	i := 0
+	for {
+		if i != -1 && i >= kea.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
+			break
+		}
+		if err = kea.Connect(); err == nil || kea.Connected() {
+			kea.delayFunc = fib() // Reset the reconnect delay
+			break                 // No error or unrelated to connection
+		}
+		time.Sleep(time.Duration(kea.delayFunc()) * time.Second)
+		i++
+	}
+	if err == nil && !kea.Connected() {
+		return errors.New("Not connected to Kamailio")
 	}
 	return err // nil or last error in the loop
 }
