@@ -16,6 +16,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -30,7 +31,7 @@ func fib() func() int {
 
 // Creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
 func NewKamEvapi(addr, connId string, recons int, eventHandlers map[*regexp.Regexp][]func([]byte, string), logger *syslog.Writer) (*KamEvapi, error) {
-	kea := &KamEvapi{kamaddr: addr, connId: connId, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib()}
+	kea := &KamEvapi{kamaddr: addr, connId: connId, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib(), connMutex: new(sync.RWMutex)}
 	if err := kea.Connect(); err != nil {
 		return nil, err
 	}
@@ -49,6 +50,7 @@ type KamEvapi struct {
 	dataInChan     chan string   // Listen here for replies from Kamailio
 	stopReadEvents chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
 	errReadEvents  chan error
+	connMutex      *sync.RWMutex
 }
 
 // Reads bytes from the buffer and dispatch content received as netstring
@@ -99,7 +101,9 @@ func (kea *KamEvapi) readEvents(exitChan chan struct{}, errReadEvents chan error
 func (kea *KamEvapi) sendAsNetstring(dataStr string) error {
 	cntLen := len([]byte(dataStr)) // Netstrings require number of bytes sent
 	dataOut := fmt.Sprintf("%d:%s,", cntLen, dataStr)
+	kea.connMutex.RLock()
 	fmt.Fprint(kea.conn, dataOut)
+	kea.connMutex.RUnlock()
 	return nil
 }
 
@@ -121,6 +125,8 @@ func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 
 // Checks if socket connected. Can be extended with pings
 func (kea *KamEvapi) Connected() bool {
+	kea.connMutex.RLock()
+	defer kea.connMutex.RUnlock()
 	if kea.conn == nil {
 		return false
 	}
@@ -129,6 +135,8 @@ func (kea *KamEvapi) Connected() bool {
 
 // Disconnects from socket
 func (kea *KamEvapi) Disconnect() (err error) {
+	kea.connMutex.Lock()
+	defer kea.connMutex.Unlock()
 	if kea.conn != nil {
 		kea.logger.Info("<KamEvapi> Disconnecting from Kamailio!")
 		err = kea.conn.Close()
@@ -150,14 +158,21 @@ func (kea *KamEvapi) Connect() error {
 	if kea.logger != nil {
 		kea.logger.Info(fmt.Sprintf("<KamEvapi> Attempting connect to Kamailio at: %s", kea.kamaddr))
 	}
-	if kea.conn, err = net.Dial("tcp", kea.kamaddr); err != nil {
+
+	conn, err := net.Dial("tcp", kea.kamaddr)
+	if err != nil {
 		return err
 	}
+	kea.connMutex.Lock()
+	kea.conn = conn
+	kea.connMutex.Unlock()
 	if kea.logger != nil {
 		kea.logger.Info("<KamEvapi> Successfully connected to Kamailio!")
 	}
 	// Connected, init buffer and prepare sync channels
+	kea.connMutex.RLock()
 	kea.rcvBuffer = bufio.NewReaderSize(kea.conn, 8192) // reinit buffer
+	kea.connMutex.RUnlock()
 	stopReadEvents := make(chan struct{})
 	kea.stopReadEvents = stopReadEvents
 	kea.errReadEvents = make(chan error)
@@ -179,7 +194,7 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 	}
 	i := 0
 	for {
-		if i != -1 && i >= kea.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
+		if kea.reconnects != -1 && i >= kea.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
 			break
 		}
 		if err = kea.Connect(); err == nil || kea.Connected() {
