@@ -138,7 +138,7 @@ func (kea *KamEvapi) Disconnect() (err error) {
 	kea.connMutex.Lock()
 	defer kea.connMutex.Unlock()
 	if kea.conn != nil {
-		kea.logger.Info("<KamEvapi> Disconnecting from Kamailio!")
+		kea.logger.Info(fmt.Sprintf("<KamEvapi> Disconnecting from %s", kea.kamaddr))
 		err = kea.conn.Close()
 		kea.conn = nil
 	}
@@ -167,7 +167,7 @@ func (kea *KamEvapi) Connect() error {
 	kea.conn = conn
 	kea.connMutex.Unlock()
 	if kea.logger != nil {
-		kea.logger.Info("<KamEvapi> Successfully connected to Kamailio!")
+		kea.logger.Info(fmt.Sprintf("<KamEvapi> Successfully connected to %s!", kea.kamaddr))
 	}
 	// Connected, init buffer and prepare sync channels
 	kea.connMutex.RLock()
