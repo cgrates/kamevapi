@@ -7,8 +7,9 @@ Copyright (C) ITsysCOM GmbH. All Rights Reserved.
 package kamevapi
 
 import (
+	"bytes"
 	"flag"
-	"log/syslog"
+	"log"
 	"testing"
 	"time"
 )
@@ -23,7 +24,8 @@ func TestKamailioConn(t *testing.T) {
 		return
 	}
 	var err error
-	l, err := syslog.New(syslog.LOG_INFO, "TestKamEvapi")
+	var buf bytes.Buffer
+	l := log.New(&buf, "logger: ", log.Lshortfile)
 	if err != nil {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
