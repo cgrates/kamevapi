@@ -119,7 +119,7 @@ func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 		}
 	}
 	if !matched {
-		kea.logger.Printf(fmt.Sprintf("<KamEvapi> WARNING: No handler for inbound data: %s", dataIn))
+		kea.logger.Printf(fmt.Sprintf("WARNING: No handler for inbound data: %s", dataIn))
 	}
 }
 
@@ -138,7 +138,7 @@ func (kea *KamEvapi) Disconnect() (err error) {
 	kea.connMutex.Lock()
 	defer kea.connMutex.Unlock()
 	if kea.conn != nil {
-		kea.logger.Printf(fmt.Sprintf("<KamEvapi> Disconnecting from %s", kea.kamaddr))
+		kea.logger.Printf(fmt.Sprintf(" Disconnecting from %s", kea.kamaddr))
 		err = kea.conn.Close()
 		kea.conn = nil
 	}
@@ -156,7 +156,7 @@ func (kea *KamEvapi) Connect() error {
 	}
 	var err error
 	if kea.logger != nil {
-		kea.logger.Printf(fmt.Sprintf("<KamEvapi> Attempting connect to Kamailio at: %s", kea.kamaddr))
+		kea.logger.Printf(fmt.Sprintf(" Attempting connect to Kamailio at: %s", kea.kamaddr))
 	}
 
 	conn, err := net.Dial("tcp", kea.kamaddr)
@@ -167,7 +167,7 @@ func (kea *KamEvapi) Connect() error {
 	kea.conn = conn
 	kea.connMutex.Unlock()
 	if kea.logger != nil {
-		kea.logger.Printf(fmt.Sprintf("<KamEvapi> Successfully connected to %s!", kea.kamaddr))
+		kea.logger.Printf(fmt.Sprintf(" Successfully connected to %s!", kea.kamaddr))
 	}
 	// Connected, init buffer and prepare sync channels
 	kea.connMutex.RLock()
