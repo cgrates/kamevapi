@@ -161,6 +161,11 @@ func (kea *KamEvapi) Connect() error {
 
 	conn, err := net.Dial("tcp", kea.kamaddr)
 	if err != nil {
+		if kea.logger != nil {
+			kea.logger.Printf(
+				fmt.Sprintf("<KamEvapi> Failed connecting to Kamailio at: %s, error: %s",
+					kea.kamaddr, err))
+		}
 		return err
 	}
 	kea.connMutex.Lock()
