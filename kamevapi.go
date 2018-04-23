@@ -230,6 +230,13 @@ func (kea *KamEvapi) ReadEvents() (err error) {
 	return err
 }
 
+func (kea *KamEvapi) RemoteAddr() net.Addr {
+	if !kea.Connected() {
+		return nil
+	}
+	return kea.conn.RemoteAddr()
+}
+
 // Send data to Kamailio
 func (kea *KamEvapi) Send(dataStr string) error {
 	if err := kea.ReconnectIfNeeded(); err != nil {
