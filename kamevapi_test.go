@@ -82,7 +82,59 @@ func TestDispatchEvent(t *testing.T) {
   "cgr_answertime":"1420142016",
   "cgr_duration":"6"}`,
 	}
-	if !reflect.DeepEqual(expectEvents, events) {
+	expectEvents2 := []string{
+		`{"event":"CGR_CALL_END",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001", 
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016",
+  "cgr_duration":"6"}`,
+		`{"event":"CGR_AUTH_REQUEST",
+  "tr_index":"35215",
+  "tr_label":"852281699",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_setuptime":"1420142013"}`, `{"event":"CGR_CALL_START",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "h_entry":"2395",
+  "h_id":"2711",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016"}`,
+	}
+	expectEvents3 := []string{
+		`{"event":"CGR_CALL_END",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001", 
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016",
+  "cgr_duration":"6"}`, `{"event":"CGR_CALL_START",
+  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
+  "from_tag":"4c759c18",
+  "h_entry":"2395",
+  "h_id":"2711",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_answertime":"1420142016"}`,
+		`{"event":"CGR_AUTH_REQUEST",
+  "tr_index":"35215",
+  "tr_label":"852281699",
+  "cgr_reqtype":"postpaid",
+  "cgr_account":"1001",
+  "cgr_destination":"1002",
+  "cgr_setuptime":"1420142013"}`,
+	}
+	if !reflect.DeepEqual(expectEvents, events) &&
+		!reflect.DeepEqual(expectEvents2, events) &&
+		!reflect.DeepEqual(expectEvents3, events) {
 		t.Errorf("Received events: %+v", events)
 	}
 
