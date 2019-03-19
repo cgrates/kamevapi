@@ -33,7 +33,11 @@ func fib() func() int {
 func NewKamEvapi(addr, connId string, recons int, eventHandlers map[*regexp.Regexp][]func([]byte, string), logger *log.Logger) (*KamEvapi, error) {
 	kea := &KamEvapi{kamaddr: addr, connId: connId, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib(), connMutex: new(sync.RWMutex)}
 	if err := kea.Connect(); err != nil {
-		return nil, err
+		if kea.reconnects == -1 {
+			kea.logger.Printf(fmt.Sprintf(" Connection failed (%s) but we will reconnect to %s in reconnecting loop", err, kea.kamaddr))
+		} else {
+			return nil, err
+		}
 	}
 	return kea, nil
 }
