@@ -184,29 +184,18 @@ func (kea *KamEvapi) Connect() error {
 	return nil                                           // Connected
 }
 
-// If not connected, attempt reconnect if allowed
+// ReconnectIfNeeded if not connected, attempt reconnect if allowed
 func (kea *KamEvapi) ReconnectIfNeeded() error {
 	if kea.Connected() { // No need to reconnect
 		return nil
 	}
 	var err error
-	for i := 0; i < kea.reconnects; i++ {
-		if err = kea.Connect(); err == nil || kea.Connected() {
-			break // No error or unrelated to connection
-		}
-		time.Sleep(time.Duration(kea.delayFunc()) * time.Second)
-	}
-	i := 0
-	for {
-		if kea.reconnects != -1 && i >= kea.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
-			break
-		}
+	for i := 0; kea.reconnects == -1 || i < kea.reconnects; i++ {
 		if err = kea.Connect(); err == nil || kea.Connected() {
 			kea.delayFunc = fib() // Reset the reconnect delay
 			break                 // No error or unrelated to connection
 		}
 		time.Sleep(time.Duration(kea.delayFunc()) * time.Second)
-		i++
 	}
 	if err == nil && !kea.Connected() {
 		return errors.New("Not connected to Kamailio")
@@ -214,7 +203,7 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 	return err // nil or last error in the loop
 }
 
-// Reads events from socket, attempt reconnect if disconnected
+// ReadEvents reads events from socket, attempt reconnect if disconnected
 func (kea *KamEvapi) ReadEvents() (err error) {
 	for {
 		if err = <-kea.errReadEvents; err == io.EOF { // Disconnected, try reconnect
