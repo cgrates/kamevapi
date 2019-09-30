@@ -29,7 +29,7 @@ func fib() func() int {
 	}
 }
 
-// Creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
+// NewKamEvapi creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
 func NewKamEvapi(addr string, connIdx int, recons int, eventHandlers map[*regexp.Regexp][]func([]byte, int), logger *log.Logger) (*KamEvapi, error) {
 	kea := &KamEvapi{kamaddr: addr, connIdx: connIdx, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib(), connMutex: new(sync.RWMutex)}
 	if err := kea.Connect(); err != nil {
@@ -94,7 +94,6 @@ func (kea *KamEvapi) readEvents(exitChan chan struct{}, errReadEvents chan error
 		}
 		kea.dispatchEvent(dataIn)
 	}
-	return
 }
 
 // Formats string content as netstring and sends over the socket
@@ -123,7 +122,7 @@ func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 	}
 }
 
-// Checks if socket connected. Can be extended with pings
+// Connected checks if socket connected. Can be extended with pings
 func (kea *KamEvapi) Connected() bool {
 	kea.connMutex.RLock()
 	defer kea.connMutex.RUnlock()
@@ -133,7 +132,7 @@ func (kea *KamEvapi) Connected() bool {
 	return true
 }
 
-// Disconnects from socket
+// Disconnect disconnects from socket
 func (kea *KamEvapi) Disconnect() (err error) {
 	kea.connMutex.Lock()
 	defer kea.connMutex.Unlock()
@@ -225,11 +224,14 @@ func (kea *KamEvapi) ReadEvents() (err error) {
 			if err = kea.ReconnectIfNeeded(); err != nil {
 				break
 			}
+		} else if err != nil {
+			break // return any error different from io.EOF
 		}
 	}
-	return err
+	return
 }
 
+// RemoteAddr returns the connection address if is connected
 func (kea *KamEvapi) RemoteAddr() net.Addr {
 	if !kea.Connected() {
 		return nil
