@@ -9,6 +9,10 @@ package kamevapi
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
+	"log"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -138,4 +142,127 @@ func TestDispatchEvent(t *testing.T) {
 		t.Errorf("Received events: %+v", events)
 	}
 
+}
+
+func TestKamevapiFib(t *testing.T) {
+	fib := fib()
+	f := fib()
+	expected := 1
+	if expected != f {
+		t.Errorf("Exptected %v but received %v", expected, f)
+	}
+	f = fib()
+	expected = 1
+	if expected != f {
+		t.Errorf("Exptected %v but received %v", expected, f)
+	}
+	f = fib()
+	expected = 2
+	if expected != f {
+		t.Errorf("Exptected %v but received %v", expected, f)
+	}
+	f = fib()
+	expected = 3
+	if expected != f {
+		t.Errorf("Exptected %v but received %v", expected, f)
+	}
+	f = fib()
+	expected = 5
+	if expected != f {
+		t.Errorf("Exptected %v but received %v", expected, f)
+	}
+}
+
+func TestNewKamEvapiError(t *testing.T) {
+	var buf bytes.Buffer
+	var err error
+	lg := log.New(&buf, "logger: ", log.Lshortfile)
+	if err != nil {
+		t.Fatal("Cannot connect to syslog:", err)
+	}
+	errExpect := "dial tcp 127.0.0.1:9435: connect: connection refused"
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, nil, lg); err == nil || err.Error() != errExpect {
+		t.Errorf("Expected %v but received %v", errExpect, err)
+	}
+}
+
+func TestReadevents(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:9435")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go l.Accept()
+	defer l.Close()
+	var buf bytes.Buffer
+	lg := log.New(&buf, "logger: ", log.Lshortfile)
+	if err != nil {
+		t.Fatal("Cannot connect to syslog:", err)
+	}
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, nil, lg); err != nil {
+		t.Fatal("Could not create KamEvapi, error: ", err)
+	}
+	exitChan := make(chan struct{}, 1)
+	errorChan := make(chan error, 1)
+	errorChan <- err
+	close(exitChan)
+	kea.readEvents(exitChan, errorChan)
+}
+
+func makeNewKea() *KamEvapi {
+	l, err := net.Listen("tcp", "127.0.0.1:9435")
+	if err != nil {
+		fmt.Println(err)
+	}
+	go l.Accept()
+	defer l.Close()
+	var buf bytes.Buffer
+	lg := log.New(&buf, "logger: ", log.Lshortfile)
+	if err != nil {
+		fmt.Println("Cannot connect to syslog:", err)
+	}
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, nil, lg); err != nil {
+		fmt.Println(err)
+	}
+	return kea
+}
+
+func TestConnectError(t *testing.T) {
+	kea := makeNewKea()
+	mckChan := make(chan struct{})
+	kea.stopReadEvents = mckChan
+	kea.Connect()
+}
+
+// func TestReadEvents(t *testing.T) {
+// 	kea := makeNewKea()
+// 	kea.errReadEvents <- io.EOF
+// 	if err := kea.ReadEvents(); err != nil {
+// 		t.Error(err)
+// 	}
+// }
+
+func TestSend(t *testing.T) {
+	kea := makeNewKea()
+	if err := kea.Send("test"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestRemoteAddr(t *testing.T) {
+	kea := makeNewKea()
+	if err := kea.RemoteAddr(); err == nil {
+		t.Error("Address shouldn't be nil")
+	}
+}
+
+func TestNewKamEvapiPool(t *testing.T) {
+	var buf bytes.Buffer
+	var err error
+	lg := log.New(&buf, "logger: ", log.Lshortfile)
+	if err != nil {
+		t.Fatal("Cannot connect to syslog:", err)
+	}
+	if _, err = NewKamEvapiPool(2, "127.0.0.1:9435", 0, 3, lg); err != nil {
+		t.Fatal("Could not create KamEvapi, error: ", err)
+	}
 }

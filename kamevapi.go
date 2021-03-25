@@ -126,10 +126,7 @@ func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 func (kea *KamEvapi) Connected() bool {
 	kea.connMutex.RLock()
 	defer kea.connMutex.RUnlock()
-	if kea.conn == nil {
-		return false
-	}
-	return true
+	return kea.conn != nil
 }
 
 // Disconnect disconnects from socket
