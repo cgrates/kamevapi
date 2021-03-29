@@ -385,6 +385,16 @@ func TestReadNetstringError3(t *testing.T) {
 	}
 }
 
+func TestReadNetstringError4(t *testing.T) {
+	kea := &KamEvapi{
+		rcvBuffer: bufio.NewReader(bytes.NewBufferString("10:string,")), //It is not valid because it is not "7:string!,"
+	}
+	errExpect := io.EOF
+	if _, err := kea.readNetstring(); err == nil || errExpect != err {
+		t.Errorf("Expected %v but received %v", errExpect, err)
+	}
+}
+
 func TestRemoteAddrErr(t *testing.T) {
 	kea := &KamEvapi{
 		conn:      nil,
@@ -420,10 +430,6 @@ func TestReconnectIfNeeded(t *testing.T) {
 		reconnects: 4,
 		delayFunc:  func() int { return 0 },
 	}
-	// kea.connMutex = &sync.RWMutex{}
-	// kea.conn = nil
-	// kea.reconnects = 4
-	// kea.delayFunc = func() int { return 0 }
 	if err := kea.ReconnectIfNeeded(); err != nil {
 		t.Error(err)
 	}
@@ -471,5 +477,109 @@ func TestNewKamEvapiPool(t *testing.T) {
 	}
 	if _, err = NewKamEvapiPool(2, "127.0.0.1:9435", 0, 3, lg); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
+	}
+}
+
+func TestPushKamEvapi(t *testing.T) { //When keap nor kea are nil
+	conns := make(chan *KamEvapi, 1)
+	keap := &KamEvapiPool{
+		allowedConns: make(chan struct{}, 1),
+		conns:        conns,
+	}
+	kea := makeNewKea()
+	keap.PushKamEvapi(kea)
+	// fmt.Println(<-keap.conns)
+	// fmt.Println(kea)
+	if !reflect.DeepEqual(kea, <-keap.conns) {
+		t.Errorf("Expected %v but received %v", kea, keap.conns)
+	}
+}
+
+func TestPushKamEvapiErr1(t *testing.T) { //When kea is not connected
+	conns := make(chan *KamEvapi, 1)
+	keap := &KamEvapiPool{
+		allowedConns: make(chan struct{}, 1),
+		conns:        conns,
+	}
+	kea := makeNewKea()
+	kea.conn = nil
+	keap.PushKamEvapi(kea)
+}
+
+func TestPushKamEvapiErr2(t *testing.T) { //When keap is nil
+	var kp *KamEvapiPool
+	kea := makeNewKea()
+	kp.PushKamEvapi(kea)
+}
+
+func TestPopKamEvapiErr(t *testing.T) { //When can't connect to Kameilio
+	conns := make(chan *KamEvapi, 1)
+	keap := &KamEvapiPool{
+		allowedConns: make(chan struct{}, 1),
+		conns:        conns,
+		kamAddr:      "127.0.0.1:9435",
+		connIdx:      0,
+		reconnects:   2,
+		logger:       log.Default(),
+	}
+	var test struct{}
+	keap.allowedConns <- test
+	errExpect := "dial tcp 127.0.0.1:9435: connect: connection refused"
+	if _, err := keap.PopKamEvapi(); err == nil || err.Error() != errExpect {
+		t.Errorf("Expected %v but received %v", errExpect, err)
+	}
+}
+
+func TestPopKamEvapi(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:9435")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go l.Accept()
+	defer l.Close()
+	conns := make(chan *KamEvapi, 1)
+	keap := &KamEvapiPool{
+		allowedConns: make(chan struct{}, 1),
+		conns:        conns,
+		kamAddr:      "127.0.0.1:9435",
+		connIdx:      0,
+		reconnects:   2,
+		logger:       log.Default(),
+	}
+	var idk struct{}
+	keap.allowedConns <- idk
+	if _, err := keap.PopKamEvapi(); err != nil {
+		t.Error(err)
+	}
+}
+func TestPopKamEvapi2(t *testing.T) { //When len(keap.conns) != 0
+	l, err := net.Listen("tcp", "127.0.0.1:9435")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go l.Accept()
+	defer l.Close()
+	conns := make(chan *KamEvapi, 1)
+	keap := &KamEvapiPool{
+		allowedConns: make(chan struct{}, 1),
+		conns:        conns,
+		kamAddr:      "127.0.0.1:9435",
+		connIdx:      0,
+		reconnects:   2,
+		logger:       log.Default(),
+	}
+	// var idk struct{}
+	// keap.allowedConns <- idk
+	keap.conns <- &KamEvapi{}
+	if _, err := keap.PopKamEvapi(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestPopKamEvapi3(t *testing.T) {
+	var kp *KamEvapiPool
+	errExpect := "UNCONFIGURED_KAMAILIO_POOL"
+	if _, err := kp.PopKamEvapi(); err == nil || err.Error() != errExpect {
+		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
 }
