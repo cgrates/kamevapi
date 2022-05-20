@@ -181,7 +181,7 @@ func TestNewKamEvapiError(t *testing.T) {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
 	errExpect := "dial tcp 127.0.0.1:9435: connect: connection refused"
-	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, nil, lg); err == nil || err.Error() != errExpect {
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, nil, lg); err == nil || err.Error() != errExpect {
 		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
 }
@@ -198,7 +198,7 @@ func TestReadevents(t *testing.T) {
 	if err != nil {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
-	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, nil, lg); err != nil {
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, nil, lg); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
 	}
 	exitChan := make(chan struct{}, 1)
@@ -220,7 +220,7 @@ func makeNewKea() *KamEvapi {
 	if err != nil {
 		fmt.Println("Cannot connect to syslog:", err)
 	}
-	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, nil, lg); err != nil {
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, nil, lg); err != nil {
 		fmt.Println(err)
 	}
 	return kea
