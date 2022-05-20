@@ -30,8 +30,18 @@ func fib() func() int {
 }
 
 // NewKamEvapi creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
-func NewKamEvapi(addr string, connIdx int, recons int, eventHandlers map[*regexp.Regexp][]func([]byte, int), logger *log.Logger) (*KamEvapi, error) {
-	kea := &KamEvapi{kamaddr: addr, connIdx: connIdx, reconnects: recons, eventHandlers: eventHandlers, logger: logger, delayFunc: fib(), connMutex: new(sync.RWMutex)}
+func NewKamEvapi(addr string, connIdx int, recons int, maxReconnectInterval time.Duration,
+	eventHandlers map[*regexp.Regexp][]func([]byte, int), logger *log.Logger) (*KamEvapi, error) {
+	kea := &KamEvapi{
+		kamaddr:              addr,
+		connIdx:              connIdx,
+		reconnects:           recons,
+		maxReconnectInterval: maxReconnectInterval,
+		eventHandlers:        eventHandlers,
+		logger:               logger,
+		delayFunc:            fib(),
+		connMutex:            new(sync.RWMutex),
+	}
 	if err := kea.Connect(); err != nil {
 		return nil, err
 	}
@@ -39,18 +49,19 @@ func NewKamEvapi(addr string, connIdx int, recons int, eventHandlers map[*regexp
 }
 
 type KamEvapi struct {
-	kamaddr        string // IP:Port address where to reach kamailio
-	connIdx        int    // Optional connection identifier between library and component using it
-	reconnects     int
-	eventHandlers  map[*regexp.Regexp][]func([]byte, int)
-	logger         *log.Logger
-	delayFunc      func() int
-	conn           net.Conn
-	rcvBuffer      *bufio.Reader
-	dataInChan     chan string   // Listen here for replies from Kamailio
-	stopReadEvents chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
-	errReadEvents  chan error
-	connMutex      *sync.RWMutex
+	kamaddr              string // IP:Port address where to reach kamailio
+	connIdx              int    // Optional connection identifier between library and component using it
+	reconnects           int
+	maxReconnectInterval time.Duration
+	eventHandlers        map[*regexp.Regexp][]func([]byte, int)
+	logger               *log.Logger
+	delayFunc            func() int
+	conn                 net.Conn
+	rcvBuffer            *bufio.Reader
+	dataInChan           chan string   // Listen here for replies from Kamailio
+	stopReadEvents       chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
+	errReadEvents        chan error
+	connMutex            *sync.RWMutex
 }
 
 // Reads bytes from the buffer and dispatch content received as netstring
@@ -192,7 +203,11 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 			kea.delayFunc = fib() // Reset the reconnect delay
 			break                 // No error or unrelated to connection
 		}
-		time.Sleep(time.Duration(kea.delayFunc()) * time.Second)
+		delay := time.Duration(kea.delayFunc()) * time.Second
+		if kea.maxReconnectInterval > 0 && kea.maxReconnectInterval < delay {
+			delay = kea.maxReconnectInterval
+		}
+		time.Sleep(delay)
 	}
 	if err == nil && !kea.Connected() {
 		return errors.New("Not connected to Kamailio")
@@ -237,12 +252,13 @@ func (kea *KamEvapi) Send(dataStr string) error {
 
 // Connection handler for commands sent to FreeSWITCH
 type KamEvapiPool struct {
-	kamAddr      string
-	connIdx      int
-	reconnects   int
-	logger       *log.Logger
-	allowedConns chan struct{}  // Will be populated with allowed new connections
-	conns        chan *KamEvapi // Keep here reference towards the list of opened sockets
+	kamAddr              string
+	connIdx              int
+	reconnects           int
+	maxReconnectInterval time.Duration
+	logger               *log.Logger
+	allowedConns         chan struct{}  // Will be populated with allowed new connections
+	conns                chan *KamEvapi // Keep here reference towards the list of opened sockets
 }
 
 // Retrieves a connection from the pool
@@ -259,7 +275,7 @@ func (keap *KamEvapiPool) PopKamEvapi() (*KamEvapi, error) {
 	select { // No KamEvapi available in the pool, wait for first one showing up
 	case KamEvapi = <-keap.conns:
 	case <-keap.allowedConns:
-		KamEvapi, err = NewKamEvapi(keap.kamAddr, keap.connIdx, keap.reconnects, nil, keap.logger)
+		KamEvapi, err = NewKamEvapi(keap.kamAddr, keap.connIdx, keap.reconnects, keap.maxReconnectInterval, nil, keap.logger)
 		if err != nil {
 			return nil, err
 		}
