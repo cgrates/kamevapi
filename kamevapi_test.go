@@ -145,29 +145,29 @@ func TestDispatchEvent(t *testing.T) {
 }
 
 func TestKamevapiFib(t *testing.T) {
-	fib := fib()
+	fib := fibDuration(time.Second, 0)
 	f := fib()
-	expected := 1
+	expected := 1 * time.Second
 	if expected != f {
 		t.Errorf("Exptected %v but received %v", expected, f)
 	}
 	f = fib()
-	expected = 1
+	expected = 1 * time.Second
 	if expected != f {
 		t.Errorf("Exptected %v but received %v", expected, f)
 	}
 	f = fib()
-	expected = 2
+	expected = 2 * time.Second
 	if expected != f {
 		t.Errorf("Exptected %v but received %v", expected, f)
 	}
 	f = fib()
-	expected = 3
+	expected = 3 * time.Second
 	if expected != f {
 		t.Errorf("Exptected %v but received %v", expected, f)
 	}
 	f = fib()
-	expected = 5
+	expected = 5 * time.Second
 	if expected != f {
 		t.Errorf("Exptected %v but received %v", expected, f)
 	}
@@ -181,7 +181,7 @@ func TestNewKamEvapiError(t *testing.T) {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
 	errExpect := "dial tcp 127.0.0.1:9435: connect: connection refused"
-	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, nil, lg); err == nil || err.Error() != errExpect {
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, fibDuration, nil, lg); err == nil || err.Error() != errExpect {
 		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
 }
@@ -198,7 +198,7 @@ func TestReadevents(t *testing.T) {
 	if err != nil {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
-	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, nil, lg); err != nil {
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, fibDuration, nil, lg); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
 	}
 	exitChan := make(chan struct{}, 1)
@@ -220,7 +220,7 @@ func makeNewKea() *KamEvapi {
 	if err != nil {
 		fmt.Println("Cannot connect to syslog:", err)
 	}
-	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, nil, lg); err != nil {
+	if kea, err = NewKamEvapi("127.0.0.1:9435", 0, 3, 0, fibDuration, nil, lg); err != nil {
 		fmt.Println(err)
 	}
 	return kea
@@ -262,7 +262,19 @@ func TestNewKamEvapiPool(t *testing.T) {
 	if err != nil {
 		t.Fatal("Cannot connect to syslog:", err)
 	}
-	if _, err = NewKamEvapiPool(2, "127.0.0.1:9435", 0, 3, lg); err != nil {
+	if _, err = NewKamEvapiPool(2, "127.0.0.1:9435", 0, 3, 0, fibDuration, lg); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
+	}
+}
+
+func fibDuration(durationUnit, maxDuration time.Duration) func() time.Duration {
+	a, b := 0, 1
+	return func() time.Duration {
+		a, b = b, a+b
+		fibNrAsDuration := time.Duration(a) * durationUnit
+		if maxDuration > 0 && maxDuration < fibNrAsDuration {
+			return maxDuration
+		}
+		return fibNrAsDuration
 	}
 }
