@@ -20,17 +20,9 @@ import (
 	"time"
 )
 
-// successive Fibonacci numbers.
-func fib() func() int {
-	a, b := 0, 1
-	return func() int {
-		a, b = b, a+b
-		return a
-	}
-}
-
 // NewKamEvapi creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
 func NewKamEvapi(addr string, connIdx int, recons int, maxReconnectInterval time.Duration,
+	delayFunc func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[*regexp.Regexp][]func([]byte, int), logger *log.Logger) (*KamEvapi, error) {
 	kea := &KamEvapi{
 		kamaddr:              addr,
@@ -39,7 +31,7 @@ func NewKamEvapi(addr string, connIdx int, recons int, maxReconnectInterval time
 		maxReconnectInterval: maxReconnectInterval,
 		eventHandlers:        eventHandlers,
 		logger:               logger,
-		delayFunc:            fib(),
+		delayFunc:            delayFunc,
 		connMutex:            new(sync.RWMutex),
 	}
 	if err := kea.Connect(); err != nil {
@@ -55,7 +47,7 @@ type KamEvapi struct {
 	maxReconnectInterval time.Duration
 	eventHandlers        map[*regexp.Regexp][]func([]byte, int)
 	logger               *log.Logger
-	delayFunc            func() int
+	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
 	conn                 net.Conn
 	rcvBuffer            *bufio.Reader
 	dataInChan           chan string   // Listen here for replies from Kamailio
@@ -198,16 +190,12 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 		return nil
 	}
 	var err error
+	delay := kea.delayFunc(time.Second, kea.maxReconnectInterval)
 	for i := 0; kea.reconnects == -1 || i < kea.reconnects; i++ {
 		if err = kea.Connect(); err == nil || kea.Connected() {
-			kea.delayFunc = fib() // Reset the reconnect delay
-			break                 // No error or unrelated to connection
+			break // No error or unrelated to connection
 		}
-		delay := time.Duration(kea.delayFunc()) * time.Second
-		if kea.maxReconnectInterval > 0 && kea.maxReconnectInterval < delay {
-			delay = kea.maxReconnectInterval
-		}
-		time.Sleep(delay)
+		time.Sleep(delay())
 	}
 	if err == nil && !kea.Connected() {
 		return errors.New("Not connected to Kamailio")
@@ -256,6 +244,7 @@ type KamEvapiPool struct {
 	connIdx              int
 	reconnects           int
 	maxReconnectInterval time.Duration
+	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration
 	logger               *log.Logger
 	allowedConns         chan struct{}  // Will be populated with allowed new connections
 	conns                chan *KamEvapi // Keep here reference towards the list of opened sockets
@@ -275,7 +264,8 @@ func (keap *KamEvapiPool) PopKamEvapi() (*KamEvapi, error) {
 	select { // No KamEvapi available in the pool, wait for first one showing up
 	case KamEvapi = <-keap.conns:
 	case <-keap.allowedConns:
-		KamEvapi, err = NewKamEvapi(keap.kamAddr, keap.connIdx, keap.reconnects, keap.maxReconnectInterval, nil, keap.logger)
+		KamEvapi, err = NewKamEvapi(keap.kamAddr, keap.connIdx, keap.reconnects, keap.maxReconnectInterval,
+			keap.delayFuncConstructor, nil, keap.logger)
 		if err != nil {
 			return nil, err
 		}
@@ -297,7 +287,8 @@ func (keap *KamEvapiPool) PushKamEvapi(kea *KamEvapi) {
 }
 
 // Instantiates a new KamEvapiPool
-func NewKamEvapiPool(maxconns int, kamAddr string, connIdx, reconnects int, l *log.Logger) (*KamEvapiPool, error) {
+func NewKamEvapiPool(maxconns int, kamAddr string, connIdx, reconnects int, maxReconnectInterval time.Duration,
+	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration, l *log.Logger) (*KamEvapiPool, error) {
 	pool := &KamEvapiPool{kamAddr: kamAddr, connIdx: connIdx, reconnects: reconnects, logger: l}
 	pool.allowedConns = make(chan struct{}, maxconns)
 	var emptyConn struct{}
