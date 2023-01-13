@@ -104,7 +104,10 @@ func (kea *KamEvapi) sendAsNetstring(dataStr string) error {
 	cntLen := len([]byte(dataStr)) // Netstrings require number of bytes sent
 	dataOut := fmt.Sprintf("%d:%s,", cntLen, dataStr)
 	kea.connMutex.RLock()
-	fmt.Fprint(kea.conn, dataOut)
+	_, err := fmt.Fprint(kea.conn, dataOut)
+	if err != nil {
+		return err
+	}
 	kea.connMutex.RUnlock()
 	return nil
 }
