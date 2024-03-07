@@ -12,8 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
+	"reflect"
 	"regexp"
 	"strconv"
 	"sync"
@@ -23,14 +23,17 @@ import (
 // NewKamEvapi creates a new kamEvApi, connects it and in case forkRead is enabled starts listening in background
 func NewKamEvapi(addr string, connIdx int, recons int, maxReconnectInterval time.Duration,
 	delayFunc func(time.Duration, time.Duration) func() time.Duration,
-	eventHandlers map[*regexp.Regexp][]func([]byte, int), logger *log.Logger) (*KamEvapi, error) {
+	eventHandlers map[*regexp.Regexp][]func([]byte, int), l logger) (*KamEvapi, error) {
+	if l == nil || (reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
+		l = nopLogger{}
+	}
 	kea := &KamEvapi{
 		kamaddr:              addr,
 		connIdx:              connIdx,
 		reconnects:           recons,
 		maxReconnectInterval: maxReconnectInterval,
 		eventHandlers:        eventHandlers,
-		logger:               logger,
+		logger:               l,
 		delayFunc:            delayFunc,
 		connMutex:            new(sync.RWMutex),
 	}
@@ -40,17 +43,39 @@ func NewKamEvapi(addr string, connIdx int, recons int, maxReconnectInterval time
 	return kea, nil
 }
 
+type logger interface {
+	Alert(string) error
+	Close() error
+	Crit(string) error
+	Debug(string) error
+	Emerg(string) error
+	Err(string) error
+	Info(string) error
+	Notice(string) error
+	Warning(string) error
+}
+type nopLogger struct{}
+
+func (nopLogger) Alert(string) error   { return nil }
+func (nopLogger) Close() error         { return nil }
+func (nopLogger) Crit(string) error    { return nil }
+func (nopLogger) Debug(string) error   { return nil }
+func (nopLogger) Emerg(string) error   { return nil }
+func (nopLogger) Err(string) error     { return nil }
+func (nopLogger) Info(string) error    { return nil }
+func (nopLogger) Notice(string) error  { return nil }
+func (nopLogger) Warning(string) error { return nil }
+
 type KamEvapi struct {
 	kamaddr              string // IP:Port address where to reach kamailio
 	connIdx              int    // Optional connection identifier between library and component using it
 	reconnects           int
 	maxReconnectInterval time.Duration
 	eventHandlers        map[*regexp.Regexp][]func([]byte, int)
-	logger               *log.Logger
+	logger               logger
 	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
 	conn                 net.Conn
 	rcvBuffer            *bufio.Reader
-	dataInChan           chan string   // Listen here for replies from Kamailio
 	stopReadEvents       chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
 	errReadEvents        chan error
 	connMutex            *sync.RWMutex
@@ -121,7 +146,7 @@ func (kea *KamEvapi) dispatchEvent(dataIn []byte) {
 		}
 	}
 	if !matched {
-		kea.logger.Printf(fmt.Sprintf("WARNING: No handler for inbound data: %s", dataIn))
+		kea.logger.Warning(fmt.Sprintf("<KamEvapi> No handler for inbound data: %s", dataIn))
 	}
 }
 
@@ -137,7 +162,7 @@ func (kea *KamEvapi) Disconnect() (err error) {
 	kea.connMutex.Lock()
 	defer kea.connMutex.Unlock()
 	if kea.conn != nil {
-		kea.logger.Printf(fmt.Sprintf(" Disconnecting from %s", kea.kamaddr))
+		kea.logger.Info(fmt.Sprintf("<KamEvapi> Disconnecting from %s", kea.kamaddr))
 		err = kea.conn.Close()
 		kea.conn = nil
 	}
@@ -155,23 +180,23 @@ func (kea *KamEvapi) Connect() error {
 	}
 	var err error
 	if kea.logger != nil {
-		kea.logger.Printf(fmt.Sprintf(" Attempting connect to Kamailio at: %s", kea.kamaddr))
+		kea.logger.Info(fmt.Sprintf("<KamEvapi> Attempting connect to Kamailio at: %s", kea.kamaddr))
 	}
 
 	conn, err := net.Dial("tcp", kea.kamaddr)
 	if err != nil {
 		if kea.logger != nil {
-			kea.logger.Printf(
+			kea.logger.Err(
 				fmt.Sprintf("<KamEvapi> Failed connecting to Kamailio at: %s, error: %s",
 					kea.kamaddr, err))
 		}
-		return err
+		return fmt.Errorf("KamEvapi %v", err)
 	}
 	kea.connMutex.Lock()
 	kea.conn = conn
 	kea.connMutex.Unlock()
 	if kea.logger != nil {
-		kea.logger.Printf(fmt.Sprintf(" Successfully connected to %s!", kea.kamaddr))
+		kea.logger.Info(fmt.Sprintf("<KamEvapi>  Successfully connected to Kamailio at %s!", kea.kamaddr))
 	}
 	// Connected, init buffer and prepare sync channels
 	kea.connMutex.RLock()
@@ -245,7 +270,7 @@ type KamEvapiPool struct {
 	reconnects           int
 	maxReconnectInterval time.Duration
 	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration
-	logger               *log.Logger
+	logger               logger
 	allowedConns         chan struct{}  // Will be populated with allowed new connections
 	conns                chan *KamEvapi // Keep here reference towards the list of opened sockets
 }
@@ -269,7 +294,6 @@ func (keap *KamEvapiPool) PopKamEvapi() (*KamEvapi, error) {
 		if err != nil {
 			return nil, err
 		}
-		return KamEvapi, nil
 	}
 	return KamEvapi, nil
 }
@@ -288,7 +312,7 @@ func (keap *KamEvapiPool) PushKamEvapi(kea *KamEvapi) {
 
 // Instantiates a new KamEvapiPool
 func NewKamEvapiPool(maxconns int, kamAddr string, connIdx, reconnects int, maxReconnectInterval time.Duration,
-	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration, l *log.Logger) (*KamEvapiPool, error) {
+	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration, l logger) (*KamEvapiPool, error) {
 	pool := &KamEvapiPool{kamAddr: kamAddr, connIdx: connIdx, reconnects: reconnects, logger: l}
 	pool.allowedConns = make(chan struct{}, maxconns)
 	var emptyConn struct{}

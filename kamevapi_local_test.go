@@ -7,9 +7,7 @@ Copyright (C) ITsysCOM GmbH. All Rights Reserved.
 package kamevapi
 
 import (
-	"bytes"
 	"flag"
-	"log"
 	"testing"
 	"time"
 )
@@ -24,14 +22,9 @@ func TestKamailioConn(t *testing.T) {
 		return
 	}
 	var err error
-	var buf bytes.Buffer
-	l := log.New(&buf, "logger: ", log.Lshortfile)
-	if err != nil {
-		t.Fatal("Cannot connect to syslog:", err)
-	}
-	if kea, err = NewKamEvapi(*kamAddr, 0, 3, 0, fibDuration, nil, l); err != nil {
+	if kea, err = NewKamEvapi(*kamAddr, 0, 3, 0, fibDuration, nil, new(nopLogger)); err != nil {
 		t.Fatal("Could not create KamEvapi, error: ", err)
 	}
-	err = kea.Send("CGR-SM Connected!")
+	_ = kea.Send("CGR-SM Connected!")
 	time.Sleep(time.Duration(2) * time.Second) // Wait 5 mins for events to show up
 }
