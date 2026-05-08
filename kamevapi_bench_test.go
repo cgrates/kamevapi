@@ -29,9 +29,13 @@ func BenchmarkReadNetstring(b *testing.B) {
 		b.Run(s.name, func(b *testing.B) {
 			payload := bytes.Repeat([]byte("x"), s.size)
 			netstring := fmt.Appendf(nil, "%d:%s,", len(payload), payload)
+			r := bytes.NewReader(netstring)
+			buf := bufio.NewReaderSize(r, 8192)
+			kea := &KamEvapi{rcvBuffer: buf}
 			b.SetBytes(int64(len(netstring)))
 			for b.Loop() {
-				kea := &KamEvapi{rcvBuffer: bufio.NewReaderSize(bytes.NewReader(netstring), 8192)}
+				r.Reset(netstring)
+				buf.Reset(r)
 				if _, err := kea.readNetstring(); err != nil {
 					b.Fatal(err)
 				}

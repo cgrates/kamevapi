@@ -429,7 +429,7 @@ func TestReadNetstringError4(t *testing.T) {
 	kea := &KamEvapi{
 		rcvBuffer: bufio.NewReader(bytes.NewBufferString("10:string,")), //It is not valid because it is not "7:string!,"
 	}
-	errExpect := io.EOF
+	errExpect := io.ErrUnexpectedEOF
 	if _, err := kea.readNetstring(); err == nil || errExpect != err {
 		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
