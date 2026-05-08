@@ -1,3 +1,3 @@
 module github.com/cgrates/kamevapi
 
-go 1.22
+go 1.24
