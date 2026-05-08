@@ -92,12 +92,8 @@ func (kea *KamEvapi) readNetstring() ([]byte, error) {
 		return nil, err
 	}
 	bytesRead := make([]byte, cntLen)
-	for i := 0; i < cntLen; i++ {
-		byteRead, err := kea.rcvBuffer.ReadByte()
-		if err != nil {
-			return nil, err
-		}
-		bytesRead[i] = byteRead
+	if _, err := io.ReadFull(kea.rcvBuffer, bytesRead); err != nil {
+		return nil, err
 	}
 	if byteRead, err := kea.rcvBuffer.ReadByte(); err != nil { // Crosscheck that our received content ends in , which is standard for netstrings
 		return nil, err
@@ -231,7 +227,7 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 // ReadEvents reads events from socket, attempt reconnect if disconnected
 func (kea *KamEvapi) ReadEvents() (err error) {
 	for {
-		if err = <-kea.errReadEvents; err == io.EOF { // Disconnected, try reconnect
+		if err = <-kea.errReadEvents; err == io.EOF || err == io.ErrUnexpectedEOF { // Disconnected, try reconnect
 			if err = kea.Disconnect(); err != nil {
 				break
 			}
