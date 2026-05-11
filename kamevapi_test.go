@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -352,6 +353,22 @@ func TestReadEventsErrNotEOF(t *testing.T) {
 		t.Errorf("Expected %v but recevied %v", errExpect, err)
 	}
 
+}
+
+func TestReadEventsErrConnReset(t *testing.T) {
+	c1, _ := net.Pipe()
+	kea := &KamEvapi{
+		errReadEvents: make(chan error, 1),
+		connMutex:     &sync.RWMutex{},
+		conn:          c1,
+		logger:        nopLogger{},
+		delayFunc:     fibDuration,
+	}
+	kea.errReadEvents <- &net.OpError{Op: "read", Err: syscall.ECONNRESET}
+	wantErr := "not connected to Kamailio"
+	if err := kea.ReadEvents(); err == nil || err.Error() != wantErr {
+		t.Errorf("ReadEvents err = %v, want %v", err, wantErr)
+	}
 }
 
 func TestSendAsNetstring(t *testing.T) {
