@@ -83,24 +83,27 @@ type KamEvapi struct {
 
 // Reads bytes from the buffer and dispatch content received as netstring
 func (kea *KamEvapi) readNetstring() ([]byte, error) {
-	contentLenStr, err := kea.rcvBuffer.ReadString(':')
+	prefix, err := kea.rcvBuffer.ReadString(':')
 	if err != nil {
 		return nil, err
 	}
-	cntLen, err := strconv.Atoi(contentLenStr[:len(contentLenStr)-1])
+	n, err := strconv.Atoi(prefix[:len(prefix)-1])
 	if err != nil {
 		return nil, err
 	}
-	bytesRead := make([]byte, cntLen)
-	if _, err := io.ReadFull(kea.rcvBuffer, bytesRead); err != nil {
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(kea.rcvBuffer, buf); err != nil {
 		return nil, err
 	}
-	if byteRead, err := kea.rcvBuffer.ReadByte(); err != nil { // Crosscheck that our received content ends in , which is standard for netstrings
+
+	// Crosscheck that our received content ends in , which is standard for netstrings
+	if trailer, err := kea.rcvBuffer.ReadByte(); err != nil {
 		return nil, err
-	} else if byteRead != ',' {
-		return nil, fmt.Errorf("Crosschecking netstring failed, no comma in the end but: %s", string(byteRead))
+	} else if trailer != ',' {
+		return nil, fmt.Errorf("crosschecking netstring failed, no comma in the end but: %s", string(trailer))
 	}
-	return bytesRead, nil
+
+	return buf, nil
 }
 
 // Reads netstrings from socket, dispatch content
@@ -219,7 +222,7 @@ func (kea *KamEvapi) ReconnectIfNeeded() error {
 		time.Sleep(delay())
 	}
 	if err == nil && !kea.Connected() {
-		return errors.New("Not connected to Kamailio")
+		return errors.New("not connected to Kamailio")
 	}
 	return err // nil or last error in the loop
 }

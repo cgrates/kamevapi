@@ -332,7 +332,7 @@ func TestReadEventsErrNotConnected(t *testing.T) {
 		delayFunc:     fibDuration,
 	}
 	kea.errReadEvents <- io.EOF
-	errExpect := "Not connected to Kamailio"
+	errExpect := "not connected to Kamailio"
 	if err := kea.ReadEvents(); err == nil || err.Error() != errExpect {
 		t.Errorf("Expected %v but recevied %v", errExpect, err)
 	}
@@ -399,7 +399,7 @@ func TestReadNetstringError1(t *testing.T) {
 	kea := &KamEvapi{
 		rcvBuffer: bufio.NewReader(bytes.NewBufferString("3:string")),
 	}
-	errExpect := "Crosschecking netstring failed, no comma in the end but: i"
+	errExpect := "crosschecking netstring failed, no comma in the end but: i"
 	if _, err := kea.readNetstring(); err == nil || errExpect != err.Error() {
 		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
@@ -451,7 +451,7 @@ func TestSendErr(t *testing.T) {
 		connMutex: &sync.RWMutex{},
 		delayFunc: fibDuration,
 	}
-	errExpect := "Not connected to Kamailio"
+	errExpect := "not connected to Kamailio"
 	if err := kea.Send("idk"); err == nil || err.Error() != errExpect {
 		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
