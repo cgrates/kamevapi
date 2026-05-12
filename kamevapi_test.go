@@ -18,6 +18,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -54,99 +55,48 @@ var callEnd = `248:{"event":"CGR_CALL_END",
 func TestDispatchEvent(t *testing.T) {
 	r, w, err := os.Pipe()
 	if err != nil {
-		t.Error("Error creating pipe!")
+		t.Fatal(err)
 	}
-	kea = &KamEvapi{}
-	kea.rcvBuffer = bufio.NewReader(r)
-	var events []string
+	errChan := make(chan error, 1)
+	t.Cleanup(func() {
+		w.Close()
+		<-errChan // wait for readEvents to exit before closing r
+		r.Close()
+	})
+
+	kea = &KamEvapi{rcvBuffer: bufio.NewReader(r)}
+
+	got := make(chan string, 3)
 	kea.eventHandlers = map[*regexp.Regexp][]func([]byte, int){
-		regexp.MustCompile(".*"): {func(ev []byte, ignr int) { events = append(events, string(ev)) }},
+		regexp.MustCompile(".*"): {func(ev []byte, _ int) { got <- string(ev) }},
 	}
-	go kea.readEvents(make(chan struct{}), make(chan error))
-	w.WriteString(authRequest)
-	w.WriteString(callStart)
-	w.WriteString(callEnd)
-	time.Sleep(50 * time.Millisecond)
-	expectEvents := []string{
-		`{"event":"CGR_AUTH_REQUEST",
-  "tr_index":"35215",
-  "tr_label":"852281699",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001",
-  "cgr_destination":"1002",
-  "cgr_setuptime":"1420142013"}`, `{"event":"CGR_CALL_START",
-  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
-  "from_tag":"4c759c18",
-  "h_entry":"2395",
-  "h_id":"2711",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001",
-  "cgr_destination":"1002",
-  "cgr_answertime":"1420142016"}`, `{"event":"CGR_CALL_END",
-  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
-  "from_tag":"4c759c18",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001", 
-  "cgr_destination":"1002",
-  "cgr_answertime":"1420142016",
-  "cgr_duration":"6"}`,
-	}
-	expectEvents2 := []string{
-		`{"event":"CGR_CALL_END",
-  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
-  "from_tag":"4c759c18",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001", 
-  "cgr_destination":"1002",
-  "cgr_answertime":"1420142016",
-  "cgr_duration":"6"}`,
-		`{"event":"CGR_AUTH_REQUEST",
-  "tr_index":"35215",
-  "tr_label":"852281699",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001",
-  "cgr_destination":"1002",
-  "cgr_setuptime":"1420142013"}`, `{"event":"CGR_CALL_START",
-  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
-  "from_tag":"4c759c18",
-  "h_entry":"2395",
-  "h_id":"2711",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001",
-  "cgr_destination":"1002",
-  "cgr_answertime":"1420142016"}`,
-	}
-	expectEvents3 := []string{
-		`{"event":"CGR_CALL_END",
-  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
-  "from_tag":"4c759c18",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001", 
-  "cgr_destination":"1002",
-  "cgr_answertime":"1420142016",
-  "cgr_duration":"6"}`, `{"event":"CGR_CALL_START",
-  "callid":"fcab096696848e58191ed79fdd732751@0:0:0:0:0:0:0:0",
-  "from_tag":"4c759c18",
-  "h_entry":"2395",
-  "h_id":"2711",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001",
-  "cgr_destination":"1002",
-  "cgr_answertime":"1420142016"}`,
-		`{"event":"CGR_AUTH_REQUEST",
-  "tr_index":"35215",
-  "tr_label":"852281699",
-  "cgr_reqtype":"postpaid",
-  "cgr_account":"1001",
-  "cgr_destination":"1002",
-  "cgr_setuptime":"1420142013"}`,
-	}
-	if !reflect.DeepEqual(expectEvents, events) &&
-		!reflect.DeepEqual(expectEvents2, events) &&
-		!reflect.DeepEqual(expectEvents3, events) {
-		t.Errorf("Received events: %+v", events)
+	go kea.readEvents(make(chan struct{}), errChan)
+
+	for _, ns := range []string{authRequest, callStart, callEnd} {
+		w.WriteString(ns)
 	}
 
+	var events []string
+	timeout := time.After(time.Second)
+	for range 3 {
+		select {
+		case e := <-got:
+			events = append(events, e)
+		case <-timeout:
+			t.Fatalf("got %d events, want 3", len(events))
+		}
+	}
+
+	strip := func(ns string) string {
+		i := strings.IndexByte(ns, ':')
+		return ns[i+1 : len(ns)-1]
+	}
+	want := []string{strip(authRequest), strip(callStart), strip(callEnd)}
+	sort.Strings(events)
+	sort.Strings(want)
+	if !reflect.DeepEqual(events, want) {
+		t.Errorf("events = %v, want %v", events, want)
+	}
 }
 
 func TestKamevapiFib(t *testing.T) {
