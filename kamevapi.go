@@ -262,11 +262,9 @@ func (kea *KamEvapi) Send(dataStr string) error {
 		return err
 	}
 	return kea.sendAsNetstring(dataStr)
-	//resSend := <-kea.dataInChan
-	//return resSend, nil
 }
 
-// Connection handler for commands sent to FreeSWITCH
+// Connection handler for commands sent to Kamailio
 type KamEvapiPool struct {
 	kamAddr              string
 	connIdx              int
@@ -281,7 +279,7 @@ type KamEvapiPool struct {
 // Retrieves a connection from the pool
 func (keap *KamEvapiPool) PopKamEvapi() (*KamEvapi, error) {
 	if keap == nil {
-		return nil, errors.New("UNCONFIGURED_KAMAILIO_POOL")
+		return nil, errors.New("unconfigured Kamailio pool")
 	}
 	if len(keap.conns) != 0 { // Select directly if available, so we avoid randomness of selection
 		KamEvapi := <-keap.conns
