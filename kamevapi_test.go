@@ -644,7 +644,7 @@ func TestPopKamEvapi2(t *testing.T) { //When len(keap.conns) != 0
 
 func TestPopKamEvapi3(t *testing.T) {
 	var kp *KamEvapiPool
-	errExpect := "UNCONFIGURED_KAMAILIO_POOL"
+	errExpect := "unconfigured Kamailio pool"
 	if _, err := kp.PopKamEvapi(); err == nil || err.Error() != errExpect {
 		t.Errorf("Expected %v but received %v", errExpect, err)
 	}
