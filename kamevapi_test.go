@@ -398,6 +398,18 @@ func TestSendAsNetstring(t *testing.T) {
 	}
 }
 
+func TestSendAsNetstringWriteError(t *testing.T) {
+	w, r := net.Pipe()
+	r.Close()
+	kea := &KamEvapi{
+		conn:      w,
+		connMutex: new(sync.RWMutex),
+	}
+	if err := kea.sendAsNetstring("test"); err != io.ErrClosedPipe {
+		t.Errorf("sendAsNetstring err = %v, want %v", err, io.ErrClosedPipe)
+	}
+}
+
 func TestReadNetstring(t *testing.T) {
 	kea := &KamEvapi{
 		rcvBuffer: bufio.NewReader(bytes.NewBufferString("7:string!,")),
