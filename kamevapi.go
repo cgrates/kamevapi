@@ -124,14 +124,11 @@ func (kea *KamEvapi) readEvents(exitChan chan struct{}, errReadEvents chan error
 	}
 }
 
-// Formats string content as netstring and sends over the socket
-func (kea *KamEvapi) sendAsNetstring(dataStr string) error {
-	cntLen := len([]byte(dataStr)) // Netstrings require number of bytes sent
-	dataOut := fmt.Sprintf("%d:%s,", cntLen, dataStr)
+func (kea *KamEvapi) sendAsNetstring(s string) error {
 	kea.connMutex.RLock()
-	fmt.Fprint(kea.conn, dataOut)
-	kea.connMutex.RUnlock()
-	return nil
+	defer kea.connMutex.RUnlock()
+	_, err := fmt.Fprintf(kea.conn, "%d:%s,", len(s), s)
+	return err
 }
 
 // Dispatch the event received from Kamailio towards handlers matching it
