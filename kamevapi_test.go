@@ -1,9 +1,5 @@
-/*
-Released under MIT License <http://www.opensource.org/licenses/mit-license.php
-Copyright (C) ITsysCOM GmbH. All Rights Reserved.
-
-Provides Kamailio evapi socket communication.
-*/
+// Copyright ITsysCOM GmbH
+// SPDX-License-Identifier: MIT
 
 package kamevapi
 
